@@ -32,6 +32,8 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	pkgruntime "k8s.io/apimachinery/pkg/runtime"
@@ -52,7 +54,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	configv1 "github.com/openshift/api/config/v1"
 	machinev1beta1 "github.com/openshift/api/machine/v1beta1"
+	openshifttls "github.com/openshift/controller-runtime-common/pkg/tls"
 
 	selfnoderemediationv1alpha1 "github.com/medik8s/self-node-remediation/api/v1alpha1"
 	"github.com/medik8s/self-node-remediation/internal/apicheck"
@@ -89,8 +93,11 @@ func init() {
 
 	utilruntime.Must(selfnoderemediationv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(machinev1beta1.AddToScheme(scheme))
+	utilruntime.Must(configv1.Install(scheme))
 	//+kubebuilder:scaffold:scheme
 }
+
+//+kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 
 func main() {
 	var metricsAddr string
@@ -128,6 +135,38 @@ func main() {
 		setupLog.Info("HTTP/2 for metrics and webhook server disabled")
 	} else {
 		setupLog.Info("HTTP/2 for metrics and webhook server enabled")
+	}
+
+	// Create k8s client to fetch TLS profile from API server
+	cfg := ctrl.GetConfigOrDie()
+	setupClient, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		setupLog.Error(err, "unable to create setup client")
+		os.Exit(1)
+	}
+
+	// Fetch the TLS profile from the APIServer resource
+	isOpenShift := true
+	fetchCtx, fetchCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer fetchCancel()
+	tlsProfile, err := openshifttls.FetchAPIServerTLSProfile(fetchCtx, setupClient)
+	if err != nil {
+		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
+			setupLog.Info("Not on OpenShift, using default TLS settings")
+			isOpenShift = false
+		} else {
+			setupLog.Error(err, "failed to fetch TLS profile")
+			os.Exit(1)
+		}
+	}
+
+	// Create the TLS configuration function for the server endpoints
+	if isOpenShift {
+		tlsConfig, unsupported := openshifttls.NewTLSConfigFromProfile(tlsProfile)
+		if len(unsupported) > 0 {
+			setupLog.Info("Unsupported TLS ciphers ignored", "ciphers", unsupported)
+		}
+		tlsOpts = append(tlsOpts, tlsConfig)
 	}
 
 	// Configure cache options based on manager vs agent mode
@@ -188,7 +227,7 @@ func main() {
 	// This is intentional - agents should only need node-local resources.
 	// If out-of-scope reads are needed, use mgr.GetAPIReader() for direct API access.
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
 			BindAddress:    metricsAddr,
@@ -211,10 +250,30 @@ func main() {
 		setupLog.Error(err, "unable to verify out-of-service taint support. out-of-service taint isn't supported")
 	}
 
+	mgrCtx, mgrCtxCancel := context.WithCancel(ctrl.SetupSignalHandler())
+	defer mgrCtxCancel()
+
 	if isManager {
 		initSelfNodeRemediationManager(mgr)
 	} else {
 		initSelfNodeRemediationAgent(mgr)
+	}
+
+	// Set up the TLS security profile watcher controller.
+	// This will trigger a graceful shutdown when the TLS profile changes
+	if isOpenShift {
+		watcher := &openshifttls.SecurityProfileWatcher{
+			Client:                mgr.GetClient(),
+			InitialTLSProfileSpec: tlsProfile,
+			OnProfileChange: func(_ context.Context, _, _ configv1.TLSProfileSpec) {
+				setupLog.Info("TLS profile changed, restarting")
+				mgrCtxCancel()
+			},
+		}
+		if err := watcher.SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to set up TLS profile watcher")
+			os.Exit(1)
+		}
 	}
 
 	//+kubebuilder:scaffold:builder
@@ -229,7 +288,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(mgrCtx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
