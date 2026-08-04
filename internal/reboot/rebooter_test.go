@@ -29,12 +29,28 @@ var _ = Describe("Rebooter tests", func() {
 			isSoftwareRebootCalled = false
 		})
 
-		Context("Software reboot is disabled", func() {
+		Context("Software reboot is not configured", func() {
 			It("watchdog should not start", func() {
 				wd := rebooter.wd
 				err := wd.Start(context.TODO())
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to start watchdog, can't default to software reboot"))
+				Expect(err.Error()).To(ContainSubstring("software reboot check failed"))
+				Expect(wd.Status()).To(Equal(watchdog.Disarmed))
+			})
+		})
+
+		Context("Software reboot is disabled", func() {
+			BeforeEach(func() {
+				_ = os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "false")
+			})
+			AfterEach(func() {
+				_ = os.Unsetenv(utils.IsSoftwareRebootEnabledEnvVar)
+			})
+			It("watchdog should not start", func() {
+				wd := rebooter.wd
+				err := wd.Start(context.TODO())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("software reboot is disabled"))
 				Expect(wd.Status()).To(Equal(watchdog.Disarmed))
 			})
 		})
@@ -42,6 +58,9 @@ var _ = Describe("Rebooter tests", func() {
 		Context("Software reboot is enabled", func() {
 			BeforeEach(func() {
 				_ = os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "true")
+			})
+			AfterEach(func() {
+				_ = os.Unsetenv(utils.IsSoftwareRebootEnabledEnvVar)
 			})
 			It("should return healthy", func() {
 				wd := rebooter.wd
@@ -53,9 +72,7 @@ var _ = Describe("Rebooter tests", func() {
 				Expect(isSoftwareRebootCalled).To(BeTrue())
 			})
 		})
-
 	})
-
 })
 
 func fakeSoftwareReboot() error {

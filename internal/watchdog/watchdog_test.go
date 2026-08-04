@@ -2,11 +2,13 @@ package watchdog_test
 
 import (
 	"context"
+	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/medik8s/self-node-remediation/internal/utils"
 	"github.com/medik8s/self-node-remediation/internal/watchdog"
 )
 
@@ -77,6 +79,88 @@ var _ = Describe("Watchdog", func() {
 				g.Expect(wd.Status()).To(Equal(watchdog.Armed))
 			}, 1*time.Second, 100*time.Millisecond).Should(Succeed(), "watchdog should be armed")
 			verifyWatchdogFood(wd)
+		})
+	})
+})
+
+var _ = Describe("Watchdog start signalling", func() {
+	Context("watchdog starts successfully", func() {
+		It("should close the Started channel and expose the timeout", func(ctx SpecContext) {
+			wd := watchdog.NewFake(true)
+			Expect(wd.Started()).NotTo(BeClosed())
+			// the timeout is only known after start
+			Expect(wd.GetTimeout()).To(BeZero())
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(wd.Start(ctx)).To(Succeed())
+			}()
+
+			Eventually(wd.Started(), 1*time.Second).Should(BeClosed())
+			Expect(wd.Status()).To(Equal(watchdog.Armed))
+			Expect(wd.GetTimeout()).To(Equal(1 * time.Second))
+		})
+	})
+
+	Context("watchdog start fails with software reboot enabled", func() {
+		BeforeEach(func() {
+			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "true")).To(Succeed())
+			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+		})
+
+		It("should still close the Started channel", func(ctx SpecContext) {
+			wd := watchdog.NewFake(false)
+
+			go func() {
+				defer GinkgoRecover()
+				Expect(wd.Start(ctx)).To(Succeed())
+			}()
+
+			Eventually(wd.Started(), 1*time.Second).Should(BeClosed())
+			Expect(wd.Status()).To(Equal(watchdog.Malfunction))
+			Expect(wd.GetTimeout()).To(BeZero())
+		})
+	})
+
+	Context("watchdog start fails with software reboot disabled", func() {
+		BeforeEach(func() {
+			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "false")).To(Succeed())
+			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+		})
+
+		It("should close the Started channel so callers are not blocked", func(ctx SpecContext) {
+			wd := watchdog.NewFake(false)
+
+			go func() {
+				defer GinkgoRecover()
+				err := wd.Start(ctx)
+				Expect(err).To(HaveOccurred())
+			}()
+
+			Eventually(wd.Started(), 1*time.Second).Should(BeClosed())
+			Expect(wd.Status()).To(Equal(watchdog.Disarmed))
+			Expect(wd.GetTimeout()).To(BeZero())
+		})
+	})
+
+	Context("watchdog start fails with IsSoftwareRebootEnabled parse error", func() {
+		BeforeEach(func() {
+			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "not-a-bool")).To(Succeed())
+			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+		})
+
+		It("should close the Started channel so callers are not blocked", func(ctx SpecContext) {
+			wd := watchdog.NewFake(false)
+
+			go func() {
+				defer GinkgoRecover()
+				err := wd.Start(ctx)
+				Expect(err).To(HaveOccurred())
+			}()
+
+			Eventually(wd.Started(), 1*time.Second).Should(BeClosed())
+			Expect(wd.Status()).To(Equal(watchdog.Disarmed))
+			Expect(wd.GetTimeout()).To(BeZero())
 		})
 	})
 })
