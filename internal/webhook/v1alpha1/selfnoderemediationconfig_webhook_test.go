@@ -12,7 +12,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	remediationv1alpha1 "github.com/medik8s/self-node-remediation/api/v1alpha1"
 )
@@ -186,7 +185,7 @@ var _ = Describe("SelfNodeRemediationConfig Validation", func() {
 	})
 })
 
-func testSingleInvalidField(validator admission.CustomValidator, validationType validationType) {
+func testSingleInvalidField(validator *SNRConfigValidator, validationType validationType) {
 	for _, item := range testItems {
 		item := item
 
@@ -411,7 +410,7 @@ func testSingleInvalidField(validator admission.CustomValidator, validationType 
 	})
 }
 
-func testMultipleInvalidFields(validator admission.CustomValidator, validationType validationType) {
+func testMultipleInvalidFields(validator *SNRConfigValidator, validationType validationType) {
 	var errorMsg string
 	snrc := createTestSelfNodeRemediationConfigCR()
 
@@ -443,7 +442,7 @@ func testMultipleInvalidFields(validator admission.CustomValidator, validationTy
 	})
 }
 
-func testValidCR(validator admission.CustomValidator, validationType validationType) {
+func testValidCR(validator *SNRConfigValidator, validationType validationType) {
 	snrc := &remediationv1alpha1.SelfNodeRemediationConfig{}
 	snrc.Name = "self-node-remediation-config"
 	snrc.Namespace = "default"

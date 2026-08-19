@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	remediationv1alpha1 "github.com/medik8s/self-node-remediation/api/v1alpha1"
 	"github.com/medik8s/self-node-remediation/internal/utils"
@@ -19,7 +18,7 @@ var _ = Describe("SelfNodeRemediationTemplate Validation", func() {
 
 		var snrtValid *remediationv1alpha1.SelfNodeRemediationTemplate
 		var outOfServiceStrategy *remediationv1alpha1.SelfNodeRemediationTemplate
-		var validator admission.CustomValidator
+		var validator *SNRTemplateValidator
 
 		BeforeEach(func() {
 			snrtValid = &remediationv1alpha1.SelfNodeRemediationTemplate{

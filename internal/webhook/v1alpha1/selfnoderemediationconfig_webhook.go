@@ -23,7 +23,6 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -67,8 +66,7 @@ type field struct {
 var selfNodeRemediationConfigLog = logf.Log.WithName("selfnoderemediationconfig-resource")
 
 func SetupSNRConfigWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).
-		For(&remediationv1alpha1.SelfNodeRemediationConfig{}).
+	return ctrl.NewWebhookManagedBy(mgr, &remediationv1alpha1.SelfNodeRemediationConfig{}).
 		WithValidator(&SNRConfigValidator{}).
 		Complete()
 }
@@ -77,14 +75,10 @@ func SetupSNRConfigWebhookWithManager(mgr ctrl.Manager) error {
 
 type SNRConfigValidator struct{}
 
-var _ admission.CustomValidator = &SNRConfigValidator{}
+var _ admission.Validator[*remediationv1alpha1.SelfNodeRemediationConfig] = &SNRConfigValidator{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (v *SNRConfigValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	snrConfig, ok := obj.(*remediationv1alpha1.SelfNodeRemediationConfig)
-	if !ok {
-		return nil, fmt.Errorf("expected a SelfNodeRemediationConfig but got a %T", obj)
-	}
+func (v *SNRConfigValidator) ValidateCreate(_ context.Context, snrConfig *remediationv1alpha1.SelfNodeRemediationConfig) (admission.Warnings, error) {
 	selfNodeRemediationConfigLog.Info("validate create", "name", snrConfig.Name)
 
 	warnings := validatePeerTimeoutSafety(snrConfig)
@@ -99,11 +93,7 @@ func (v *SNRConfigValidator) ValidateCreate(_ context.Context, obj runtime.Objec
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (v *SNRConfigValidator) ValidateUpdate(_ context.Context, _, newObj runtime.Object) (admission.Warnings, error) {
-	snrConfig, ok := newObj.(*remediationv1alpha1.SelfNodeRemediationConfig)
-	if !ok {
-		return nil, fmt.Errorf("expected a SelfNodeRemediationConfig but got a %T", newObj)
-	}
+func (v *SNRConfigValidator) ValidateUpdate(_ context.Context, _, snrConfig *remediationv1alpha1.SelfNodeRemediationConfig) (admission.Warnings, error) {
 	selfNodeRemediationConfigLog.Info("validate update", "name", snrConfig.Name)
 
 	warnings := validatePeerTimeoutSafety(snrConfig)
@@ -116,11 +106,7 @@ func (v *SNRConfigValidator) ValidateUpdate(_ context.Context, _, newObj runtime
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (v *SNRConfigValidator) ValidateDelete(_ context.Context, obj runtime.Object) (warnings admission.Warnings, err error) {
-	snrConfig, ok := obj.(*remediationv1alpha1.SelfNodeRemediationConfig)
-	if !ok {
-		return nil, fmt.Errorf("expected a SelfNodeRemediationConfig but got a %T", obj)
-	}
+func (v *SNRConfigValidator) ValidateDelete(_ context.Context, snrConfig *remediationv1alpha1.SelfNodeRemediationConfig) (warnings admission.Warnings, err error) {
 	selfNodeRemediationConfigLog.Info("validate delete", "name", snrConfig.Name)
 	if snrConfig.Name == remediationv1alpha1.ConfigCRName {
 		if deploymentNs, err := utils.GetDeploymentNamespace(); err != nil {
