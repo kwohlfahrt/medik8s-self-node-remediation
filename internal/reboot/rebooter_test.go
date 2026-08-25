@@ -9,7 +9,6 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/medik8s/self-node-remediation/internal/utils"
 	"github.com/medik8s/self-node-remediation/internal/watchdog"
 )
 
@@ -41,10 +40,10 @@ var _ = Describe("Rebooter tests", func() {
 
 		Context("Software reboot is disabled", func() {
 			BeforeEach(func() {
-				_ = os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "false")
+				_ = os.Setenv(watchdog.IsSoftwareRebootEnabledEnvVar, "false")
 			})
 			AfterEach(func() {
-				_ = os.Unsetenv(utils.IsSoftwareRebootEnabledEnvVar)
+				_ = os.Unsetenv(watchdog.IsSoftwareRebootEnabledEnvVar)
 			})
 			It("watchdog should not start", func() {
 				wd := rebooter.wd
@@ -57,10 +56,10 @@ var _ = Describe("Rebooter tests", func() {
 
 		Context("Software reboot is enabled", func() {
 			BeforeEach(func() {
-				_ = os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "true")
+				_ = os.Setenv(watchdog.IsSoftwareRebootEnabledEnvVar, "true")
 			})
 			AfterEach(func() {
-				_ = os.Unsetenv(utils.IsSoftwareRebootEnabledEnvVar)
+				_ = os.Unsetenv(watchdog.IsSoftwareRebootEnabledEnvVar)
 			})
 			It("should return healthy", func() {
 				wd := rebooter.wd

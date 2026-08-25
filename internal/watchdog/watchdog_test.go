@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/medik8s/self-node-remediation/internal/utils"
 	"github.com/medik8s/self-node-remediation/internal/watchdog"
 )
 
@@ -104,8 +103,8 @@ var _ = Describe("Watchdog start signalling", func() {
 
 	Context("watchdog start fails with software reboot enabled", func() {
 		BeforeEach(func() {
-			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "true")).To(Succeed())
-			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+			Expect(os.Setenv(watchdog.IsSoftwareRebootEnabledEnvVar, "true")).To(Succeed())
+			DeferCleanup(os.Unsetenv, watchdog.IsSoftwareRebootEnabledEnvVar)
 		})
 
 		It("should still close the Started channel", func(ctx SpecContext) {
@@ -124,8 +123,8 @@ var _ = Describe("Watchdog start signalling", func() {
 
 	Context("watchdog start fails with software reboot disabled", func() {
 		BeforeEach(func() {
-			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "false")).To(Succeed())
-			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+			Expect(os.Setenv(watchdog.IsSoftwareRebootEnabledEnvVar, "false")).To(Succeed())
+			DeferCleanup(os.Unsetenv, watchdog.IsSoftwareRebootEnabledEnvVar)
 		})
 
 		It("should close the Started channel so callers are not blocked", func(ctx SpecContext) {
@@ -145,8 +144,8 @@ var _ = Describe("Watchdog start signalling", func() {
 
 	Context("watchdog start fails with IsSoftwareRebootEnabled parse error", func() {
 		BeforeEach(func() {
-			Expect(os.Setenv(utils.IsSoftwareRebootEnabledEnvVar, "not-a-bool")).To(Succeed())
-			DeferCleanup(os.Unsetenv, utils.IsSoftwareRebootEnabledEnvVar)
+			Expect(os.Setenv(watchdog.IsSoftwareRebootEnabledEnvVar, "not-a-bool")).To(Succeed())
+			DeferCleanup(os.Unsetenv, watchdog.IsSoftwareRebootEnabledEnvVar)
 		})
 
 		It("should close the Started channel so callers are not blocked", func(ctx SpecContext) {

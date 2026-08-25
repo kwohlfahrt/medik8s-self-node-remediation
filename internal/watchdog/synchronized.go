@@ -2,6 +2,8 @@ package watchdog
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -9,8 +11,6 @@ import (
 	"github.com/pkg/errors"
 
 	"k8s.io/apimachinery/pkg/util/wait"
-
-	"github.com/medik8s/self-node-remediation/internal/utils"
 )
 
 var _ Watchdog = &synchronizedWatchdog{}
@@ -20,6 +20,10 @@ const (
 	Armed
 	Triggered
 	Malfunction
+)
+
+const (
+	IsSoftwareRebootEnabledEnvVar = "IS_SOFTWARE_REBOOT_ENABLED"
 )
 
 type watchdogStatus uint8
@@ -89,7 +93,7 @@ func (swd *synchronizedWatchdog) init() error {
 	timeout, startErr := swd.impl.start()
 	if startErr != nil {
 		//In case can't use software reboot return an error
-		isSoftwareRebootEnabled, err := utils.IsSoftwareRebootEnabled()
+		isSoftwareRebootEnabled, err := IsSoftwareRebootEnabled()
 		if err != nil {
 			return errors.Wrapf(err, "software reboot check failed while handling watchdog start failure: %v", startErr)
 		}
@@ -156,4 +160,13 @@ func (swd *synchronizedWatchdog) Status() watchdogStatus {
 	swd.mutex.Lock()
 	defer swd.mutex.Unlock()
 	return swd.status
+}
+
+func IsSoftwareRebootEnabled() (bool, error) {
+	softwareRebootEnabledEnv := os.Getenv(IsSoftwareRebootEnabledEnvVar)
+	softwareRebootEnabled, err := strconv.ParseBool(softwareRebootEnabledEnv)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to convert IS_SOFTWARE_REBOOT_ENABLED env value to boolean. value is: %s", softwareRebootEnabledEnv)
+	}
+	return softwareRebootEnabled, nil
 }
