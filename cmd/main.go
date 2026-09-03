@@ -414,15 +414,10 @@ func initSelfNodeRemediationAgent(mgr manager.Manager) {
 			setupLog.Error(err, "failed to add watchdog to the manager")
 			os.Exit(1)
 		}
-		if err = mgr.Add(utils.NewAnnotationUpdater(wd, myNodeName, mgr.GetAPIReader(), mgr.GetClient())); err != nil {
-			setupLog.Error(err, "failed to queue annotation update", "annotation", utils.IsRebootCapableAnnotation)
-			os.Exit(1)
-		}
-	} else {
-		if err = utils.UpdateNodeAnnotations(false, 0, myNodeName, mgr.GetAPIReader(), mgr.GetClient()); err != nil {
-			setupLog.Error(err, "failed to update node's annotation", "annotation", utils.IsRebootCapableAnnotation)
-			os.Exit(1)
-		}
+	}
+	if err = mgr.Add(utils.NewAnnotationUpdater(wd, myNodeName, mgr.GetAPIReader(), mgr.GetClient())); err != nil {
+		setupLog.Error(err, "failed to queue annotation update", "annotation", utils.IsRebootCapableAnnotation)
+		os.Exit(1)
 	}
 
 	// TODO make the interval configurable
